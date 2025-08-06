@@ -3,6 +3,8 @@ import io
 from pydub import AudioSegment
 from google.cloud import speech_v1p1beta1 as speech
 
+
+
 def speech_to_text_api(audio_chunk: AudioSegment) -> str:
     """
     Transcribes a given audio chunk using the Google Cloud Speech-to-Text API.
@@ -77,13 +79,10 @@ def process_audio_concurrently(audio_data):
         # Process the results as they are completed
         for future in concurrent.futures.as_completed(future_to_chunk_index):
             chunk_index = future_to_chunk_index[future]
-            try:
-                transcribed_text = future.result()
-                transcriptions[chunk_index] = transcribed_text
-                st.write(f"Chunk {chunk_index + 1} transcribed: {transcribed_text}")
 
-            except Exception as e:
-                st.error(f"Chunk {chunk_index + 1} processing failed: {e}")
+
+
+
 
     # Combine the results in the correct order for final analysis
     final_transcript = " ".join(transcriptions[i] for i in sorted(transcriptions))

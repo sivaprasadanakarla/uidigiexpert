@@ -1,0 +1,6 @@
+streamlit
+google-cloud-storage
+google-cloud-aiplatform
+pydub
+google-cloud-speech
+python-dotenv

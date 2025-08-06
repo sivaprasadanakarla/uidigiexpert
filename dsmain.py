@@ -1,12 +1,46 @@
 import streamlit as st
-from gsutil import read_schedule_from_gcs
-from premeet_agent_test import invoke_premeet_agent
-import io
-from pydub import AudioSegment
-from s2tconcur import process_chunk
-from inmeetagent_test import invoke_inmeet_agent
+import os
 
-# Page configuration
+# Set environment variables before importing pydub
+os.environ["PATH"] += os.pathsep + "/usr/local/Cellar/ffmpeg/7.1.1_3/bin"
+os.environ["FFMPEG_BINARY"] = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin/ffmpeg"
+os.environ["FFPROBE_BINARY"] = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin/ffprobe"
+import time
+import threading
+import numpy as np
+import matplotlib.pyplot as plt
+from io import BytesIO
+from pydub import AudioSegment
+from gsutil import read_schedule_from_gcs, read_notification_history_from_gcs
+from premeet_agent_test import invoke_premeet_agent
+from inmeetagent_test import invoke_inmeet_agent
+from s2tconcur import process_chunk
+
+# Configure ffmpeg path
+AudioSegment.converter = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin/ffmpeg"
+AudioSegment.ffprobe = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin/ffprobe"
+
+# Helper: Extract waveform from audio
+def get_waveform(audio: AudioSegment):
+    samples = np.array(audio.get_array_of_samples())
+    if audio.channels == 2:
+        samples = samples.reshape((-1, 2)).mean(axis=1)
+    return samples
+
+# Helper: Plot waveform with red marker
+def plot_waveform(samples, sample_rate, current_time_sec):
+    times = np.linspace(0, len(samples)/sample_rate, num=len(samples))
+    fig, ax = plt.subplots(figsize=(6, 2))
+    ax.plot(times, samples, linewidth=0.5)
+    ax.axvline(x=current_time_sec, color='red', linestyle='--')
+    ax.set_xlim(0, times[-1])
+    ax.set_ylim(-max(abs(samples)), max(abs(samples)))
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Amplitude")
+    ax.set_title("Audio Waveform")
+    return fig
+
+# Page config
 st.set_page_config(page_title="Advisor AI Copilot Dashboard", layout="wide")
 
 # Title
@@ -14,125 +48,82 @@ st.markdown("""
     <h1 style='text-align: center; color: #1E3A8A;'>Digital Experts AI Copilot</h1>
     <h4 style='text-align: center; color: gray;'>Empowering advisors with actionable insights and real-time assistance</h4>
 """, unsafe_allow_html=True)
+st.markdown("---")
 
-# Layout: 3 columns
 col1, col2, col3 = st.columns([1, 2, 1])
 
-# --- Column 1: Advisor Info and Schedule ---
 with col1:
-    st.markdown("**Name:** John Smith")
-    st.markdown("**Region:** APAC")
+    st.markdown("## Welcome <span style='color:#1E3A8A;'>John Smith</span>", unsafe_allow_html=True)
+    st.markdown("You are logged into Common branch")
     st.markdown("**Role:** Wealth Advisor")
+    st.markdown("**Region:** APAC")
+    st.markdown("Your last access was on 6 August 2025 at 12:29:58 PM")
     st.markdown("---")
 
     st.markdown("## Today's Meetings")
     bucket_name = "digexpbucket"
-    meetings_filename = "meetings.csv"
-
-    schedule = read_schedule_from_gcs(bucket_name, meetings_filename)
+    schedule = read_schedule_from_gcs(bucket_name, "meetings.csv")
 
     for item in schedule:
         st.markdown(f"**{item['time']}** - {item['client']} (Age {item['age']})")
 
-# --- Column 2: Pre-Meeting Suggestions ---
 with col2:
     st.markdown("## Pre-Meeting AI Suggestions")
-    # Prepend the list with the default option
     client_list = ["---Select---"] + [x["client"] for x in schedule]
     selected_client = st.selectbox("Select a client:", client_list)
-
-
-    # This block will now only run if a valid client is selected
     if selected_client and selected_client != "---Select---":
         st.info(f"Fetching insights for **{selected_client}**...")
         st.success(invoke_premeet_agent(selected_client))
+    st.markdown("---")
 
-   # if st.button("🔍 View Insights"):
-   #     st.markdown("## 📑 Past Data Summary")
-   #     st.write("Loading summaries from past emails, chats, and call transcripts...")
-   #     st.info("- Last email: Query about maturity of existing policy\n- Chat: Concern on rising market volatility\n- Transcript: Mentioned son moving abroad, may affect estate planning")
+    st.markdown("## Always-On  Service Dashboard")
+    st.markdown("#### 🧠 Recently Sent Nudges to Clients (Last 7 Days)")
 
-    st.markdown("### 🧠 Recently sent nudges to Client(Last 7 days)")
-    st.markdown("#####  July 22: 📧 New ETF investment opportunity ")
-    st.markdown("#####  July 23: 📩 Market commentary shared on health care")
-    st.markdown("#####  July 24: 📧 New ETF investment opportunity ")
-# --- Column 3: Real-time Call Analysis ---
+    notifications_df = read_notification_history_from_gcs(bucket_name)
+    if not notifications_df.empty:
+        for _, row in notifications_df.iterrows():
+            st.markdown(f"##### {row.get('notification_sent_date')}: {'📧' if row.get('notification_type') == 'email' else '📩'} {row.get('message_content')}")
+    else:
+        st.info("No notification history found for the last 7 days.")
+
 with col3:
     st.markdown("## In-Meeting Copilot advisor")
-    st.markdown("Upload audio file to simulate live client call")
     uploaded_file = st.file_uploader("Choose an audio file", type=["mp3", "wav"])
+
+    waveform_plot = st.empty()
+    feedback_container = st.container()
+    progress_bar = st.progress(0)
 
     if uploaded_file is not None:
         st.audio(uploaded_file, format='audio/wav')
-        # Initialize a button state in the session state
-        if 'transcription_started' not in st.session_state:
-            st.session_state.transcription_started = False
+        if st.button("Start Real-Time Processing"):
+            def process_audio():
+                audio = AudioSegment.from_file(BytesIO(uploaded_file.getvalue()))
+                samples = get_waveform(audio)
+                sample_rate = audio.frame_rate
+                chunk_ms = 2000
+                total_chunks = len(audio) // chunk_ms
 
-        col_start, col_end = st.columns(2)
+                for i in range(total_chunks):
+                    start = i * chunk_ms
+                    end = start + chunk_ms
+                    chunk = audio[start:end]
 
-        with col_start:
-            start_button = st.button("Start Transcription")
+                    buf = BytesIO()
+                    chunk.export(buf, format="wav")
+                    transcript = process_chunk(chunk)
+                    feedback = invoke_inmeet_agent(transcript)
 
-        with col_end:
-            end_button = st.button("End Transcription")
+                    feedback_container.markdown(f"**Chunk {i+1}:** {feedback}")
+                    progress_bar.progress((i + 1) / total_chunks)
 
-        if start_button:
-            st.session_state.transcription_started = True
+                    fig = plot_waveform(samples, sample_rate, (i+1)*2)
+                    waveform_plot.pyplot(fig)
+                    time.sleep(2)
 
-        if end_button:
-            st.session_state.transcription_started = False
-            st.info("Transcription ended. Final analysis complete.")
+                st.success("✅ All chunks processed!")
 
-        # Logic to process the audio in chunks
-        if st.session_state.transcription_started:
-            st.info("Transcribing and analyzing audio...")
-
-            # --- Audio Processing Logic ---
-            # Read the audio file into memory
-            audio_data = io.BytesIO(uploaded_file.getvalue())
-
-            # Use pydub to handle the audio file (install with pip install pydub)
-            try:
-                if uploaded_file.name.endswith('.mp3'):
-                    audio = AudioSegment.from_mp3(audio_data)
-                elif uploaded_file.name.endswith('.wav'):
-                    audio = AudioSegment.from_wav(audio_data)
-                else:
-                    st.error("Unsupported audio format.")
-                    st.stop()
-            except Exception as e:
-                st.error(f"Error processing audio file: {e}")
-                st.stop()
-
-            # Define chunk duration (in milliseconds)
-            chunk_duration_ms = 2000  # 2 seconds
-
-            # Process audio in 2-second chunks
-            for i in range(0, len(audio), chunk_duration_ms):
-                chunk = audio[i:i + chunk_duration_ms]
-
-                # Simulate a Speech-to-Text API call
-                # In a real app, you would send 'chunk' to your API and get the transcription
-                response_text = process_chunk(chunk)
-
-                # This is where you would call your STT API and get the transcript
-                # For this example, we'll just print a message
-                st.write(f"Chunk {i // chunk_duration_ms + 1}: Simulating STT API call...")
-                st.success(invoke_inmeet_agent(response_text))
-                # To simulate real-time, you could add a short delay
-                # import time; time.sleep(2)
-
-            # Simulated final output after "end" is clicked or all chunks are processed
-            if not st.session_state.transcription_started:
-                st.success("""
-                      **Final Transcript:**
-                      (Full transcript here)
-
-                      **Final Analysis:**
-                      🔹 Client appears concerned about market dip.
-                      🔹 Tone: Slightly anxious.
-                      🔹 Suggest calming strategies and long-term perspective.
-                      """)
+            threading.Thread(target=process_audio).start()
 
     if st.button("🧠 Simulate Real-Time Call"):
         st.markdown("## 📊 Call Analysis Results")
@@ -142,7 +133,6 @@ with col3:
         - **Key Topics:** Market volatility, retirement planning
         - **Action Items:** Reassure client, discuss diversification strategies
         """)
-
 
 # Footer
 st.markdown("""
