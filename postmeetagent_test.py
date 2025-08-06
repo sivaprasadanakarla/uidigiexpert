@@ -5,9 +5,9 @@ from vertexai import agent_engines
 dotenv.load_dotenv()
 
 
-def invoke_inmeet_agent(user_input: str) -> str:
+def invoke_postmeet_agent(user_input: str) -> str:
 
-    agent_engine_id = "4895615105091239936"
+    agent_engine_id = "8908322373078351872"
 
     try:
         # Get the agent engine and create a new session
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     # Define the client name to test
 
     # Call the function
-    final_briefing = invoke_inmeet_agent("I’m not sure I understand what you just said. Can you explain again?")
+    final_briefing = invoke_postmeet_agent("I’m not sure I understand what you just said. Can you explain again?")
 
     # Print the final result
     print("\n---  In-Meeting result ---")

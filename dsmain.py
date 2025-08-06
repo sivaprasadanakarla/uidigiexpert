@@ -2,9 +2,7 @@ import streamlit as st
 import os
 
 # Set environment variables before importing pydub
-os.environ["PATH"] += os.pathsep + "/usr/local/Cellar/ffmpeg/7.1.1_3/bin"
-os.environ["FFMPEG_BINARY"] = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin/ffmpeg"
-os.environ["FFPROBE_BINARY"] = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin/ffprobe"
+
 import time
 import threading
 import numpy as np
@@ -14,11 +12,12 @@ from pydub import AudioSegment
 from gsutil import read_schedule_from_gcs, read_notification_history_from_gcs
 from premeet_agent_test import invoke_premeet_agent
 from inmeetagent_test import invoke_inmeet_agent
+from postmeetagent_test import invoke_postmeet_agent
 from s2tconcur import process_chunk
-
+import base64
 # Configure ffmpeg path
-AudioSegment.converter = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin/ffmpeg"
-AudioSegment.ffprobe = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin/ffprobe"
+#AudioSegment.converter = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin/ffmpeg"
+#AudioSegment.ffprobe = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin/ffprobe"
 import re
 
 def extract_tone_sentiment(text):
@@ -80,33 +79,55 @@ def plot_waveform(samples, sample_rate, current_time_sec):
 
 # Page config
 st.set_page_config(page_title="Advisor AI Copilot Dashboard", layout="wide")
-
+# Read the image and encode it in base64
+with open("Citi_1.png", "rb") as image_file:
+    encoded = base64.b64encode(image_file.read()).decode()
+    # Inject image via HTML with CSS positioning
+    st.markdown(
+        f"""
+        <style>
+        .fixed-logo {{
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            z-index: 100;
+        }}
+        .fixed-logo img {{
+            height: 50px;
+        }}
+        </style>
+        <div class="fixed-logo">
+            <img src="data:image/png;base64,{encoded}" />
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 # Title
 st.markdown("""
-    <h1 style='text-align: center; color: #1E3A8A;'>Digital Experts AI Copilot</h1>
+    <h1 style='text-align: center; color: #1E3A8A;'>Citi Digital Experts</h1>
     <h4 style='text-align: center; color: gray;'>Empowering advisors with actionable insights and real-time assistance</h4>
 """, unsafe_allow_html=True)
 st.markdown("---")
 
-col1, col2, col3 = st.columns([1, 2, 1])
+col1, col2, col3 = st.columns([1, 2, 2])
 
 with col1:
-    st.markdown("## Welcome <span style='color:#1E3A8A;'>John Smith</span>", unsafe_allow_html=True)
+    st.markdown("### Welcome <span style='color:#1E3A8A;'>John Smith</span>", unsafe_allow_html=True)
     st.markdown("You are logged into Common branch")
     st.markdown("**Role:** Wealth Advisor")
     st.markdown("**Region:** APAC")
     st.markdown("Your last access was on 6 August 2025 at 12:29:58 PM")
     st.markdown("---")
 
-    st.markdown("## Today's Meetings")
-    bucket_name = "digexpbucket"
+    st.markdown("### Today's Meetings")
+    bucket_name = "digexpbuckselfdata"
     schedule = read_schedule_from_gcs(bucket_name, "meetings.csv")
 
     for item in schedule:
         st.markdown(f"**{item['time']}** - {item['client']} (Age {item['age']})")
 
 with col2:
-    st.markdown("## Pre-Meeting AI Suggestions")
+    st.markdown("### Pre-Meeting AI Agent")
     client_list = ["---Select---"] + [x["client"] for x in schedule]
     selected_client = st.selectbox("Select a client:", client_list)
     if selected_client and selected_client != "---Select---":
@@ -114,7 +135,7 @@ with col2:
         st.success(invoke_premeet_agent(selected_client))
     st.markdown("---")
 
-    st.markdown("## Always-On  Service Dashboard")
+    st.markdown("### Always-On  Service Dashboard")
     st.markdown("#### 🧠 Recently Sent Nudges to Clients (Last 7 Days)")
 
     notifications_df = read_notification_history_from_gcs(bucket_name)
@@ -125,7 +146,7 @@ with col2:
         st.info("No notification history found for the last 7 days.")
 
 with col3:
-    st.markdown("## In-Meeting Copilot advisor")
+    st.markdown("### In-Meeting AI Agent")
     uploaded_file = st.file_uploader("Choose an audio file", type=["mp3", "wav"])
 
     waveform_plot = st.empty()
@@ -166,6 +187,8 @@ with col3:
             chunk = audio[start:end]
             if st.session_state.stop_processing:
                 st.warning("🚫 Processing was stopped by the user.")
+                postmeetresponse = invoke_postmeet_agent(''.join(transcripts))
+                st.markdown(f"###{ postmeetresponse}")
                 break
                 # Simulate processing time
             time.sleep(3)

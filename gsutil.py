@@ -112,7 +112,7 @@ if __name__ == "__main__":
     """This block is executed only when the script is run directly."""
     # --- Example Usage ---
     # Replace with your bucket and file path
-    bucket_name = "digexpbucket"
+    bucket_name = "digexpbuckselfdata"
     source_blob_name = "meetings.csv"
 
     # Call the function to get the schedule

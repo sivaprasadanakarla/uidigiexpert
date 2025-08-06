@@ -1,4 +1,5 @@
 streamlit
+matplotlib
 google-cloud-storage
 google-cloud-aiplatform
 pydub
