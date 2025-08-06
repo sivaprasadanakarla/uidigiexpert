@@ -19,7 +19,45 @@ from s2tconcur import process_chunk
 # Configure ffmpeg path
 AudioSegment.converter = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin/ffmpeg"
 AudioSegment.ffprobe = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin/ffprobe"
+import re
 
+def extract_tone_sentiment(text):
+    import re
+    match = re.search(r"Tone:\s*(\w+)\s+Sentiment:\s*(\w+)", text)
+    if match:
+        return match.group(1), match.group(2)
+    else:
+        print(f"⚠️ Could not extract tone/sentiment from: {text}")
+        return None, None
+
+def get_tone_emoji(tone):
+    tone_map = {
+        "neutral": "😐",
+        "positive": "😊",
+        "negative": "😞",
+        "angry": "😡",
+        "frustrated": "😤",
+        "confused": "😕",
+        "happy": "😄",
+        "persuasive": "🧠",
+        "assertive": "💪",
+        "apologetic": "🙏",
+        "supportive": "🤝"
+    }
+    if not tone:
+        return "😊"
+    return tone_map.get(tone.lower(), "😊")
+
+
+def get_sentiment_emoji(sentiment):
+    sentiment_map = {
+        "positive": "👍",
+        "neutral": "😐",
+        "negative": "👎"
+    }
+    if not sentiment:
+        return "😊"
+    return sentiment_map.get(sentiment.lower(), "😊")
 # Helper: Extract waveform from audio
 def get_waveform(audio: AudioSegment):
     samples = np.array(audio.get_array_of_samples())
@@ -94,45 +132,65 @@ with col3:
     feedback_container = st.container()
     progress_bar = st.progress(0)
 
-    if uploaded_file is not None:
-        st.audio(uploaded_file, format='audio/wav')
-        if st.button("Start Real-Time Processing"):
-            def process_audio():
-                audio = AudioSegment.from_file(BytesIO(uploaded_file.getvalue()))
-                samples = get_waveform(audio)
-                sample_rate = audio.frame_rate
-                chunk_ms = 2000
-                total_chunks = len(audio) // chunk_ms
+    if uploaded_file:
+        st.audio(uploaded_file, format="audio/mp3")
+        if 'stop_processing' not in st.session_state:
+            st.session_state.stop_processing = False
 
-                for i in range(total_chunks):
-                    start = i * chunk_ms
-                    end = start + chunk_ms
-                    chunk = audio[start:end]
+        col1, col2 = st.columns(2)
 
-                    buf = BytesIO()
-                    chunk.export(buf, format="wav")
-                    transcript = process_chunk(chunk)
-                    feedback = invoke_inmeet_agent(transcript)
+        with col1:
+            if st.button("▶️ Start Processing"):
+                st.session_state.stop_processing = False
+                st.info("Processing audio in 2-second chunks...")
 
-                    feedback_container.markdown(f"**Chunk {i+1}:** {feedback}")
-                    progress_bar.progress((i + 1) / total_chunks)
+        with col2:
+            if st.button("🛑 Stop Processing"):
+                st.session_state.stop_processing = True
 
-                    fig = plot_waveform(samples, sample_rate, (i+1)*2)
-                    waveform_plot.pyplot(fig)
-                    time.sleep(2)
 
-                st.success("✅ All chunks processed!")
+            # Load audio
+        audio = AudioSegment.from_file(BytesIO(uploaded_file.getvalue()))
 
-            threading.Thread(target=process_audio).start()
+        chunk_duration_ms = 2000  # 2 seconds
+        total_chunks = len(audio) // chunk_duration_ms
 
-    if st.button("🧠 Simulate Real-Time Call"):
-        st.markdown("## 📊 Call Analysis Results")
-        st.write("Analyzing call data...")
-        st.info("""
-        - **Sentiment:** Neutral with slight anxiety
-        - **Key Topics:** Market volatility, retirement planning
-        - **Action Items:** Reassure client, discuss diversification strategies
-        """)
+        progress_bar = st.progress(0)
+        transcripts = []
+        feedbacks = []
+        chunk_placeholder = st.empty()
+
+        for i in range(total_chunks):
+            start = i * chunk_duration_ms
+            end = start + chunk_duration_ms
+            chunk = audio[start:end]
+            if st.session_state.stop_processing:
+                st.warning("🚫 Processing was stopped by the user.")
+                break
+                # Simulate processing time
+            time.sleep(3)
+
+            # Call your actual STT and LLM functions here
+            transcript = process_chunk(chunk)
+            feedback = invoke_inmeet_agent(transcript)
+
+            transcripts.append(transcript)
+            feedbacks.append(feedback)
+            tone, sentiment = extract_tone_sentiment(feedback)
+            tone_emoji = get_tone_emoji(tone)
+            sentiment_emoji = get_sentiment_emoji(sentiment)
+
+            chunk_placeholder.markdown(f"""
+                - **Tone:** `{tone}`  
+                  ### {tone_emoji}
+                - **Sentiment:** `{sentiment}`  
+                  ### {sentiment_emoji}
+                """)
+            progress_bar.progress((i + 1) / total_chunks)
+
+            #st.success("✅ Done processing all chunks.")
+
+
 
 # Footer
 st.markdown("""

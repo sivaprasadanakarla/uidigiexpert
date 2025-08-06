@@ -7,13 +7,18 @@ os.environ["FFPROBE_BINARY"] = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin/ffprobe"
 from pydub import AudioSegment
 from io import BytesIO
 import time
+from inmeetagent_test import invoke_inmeet_agent
+from  s2tconcur import speech_to_text_api
 
 # Replace these with your actual implementations
 def dummy_stt(audio_chunk: AudioSegment) -> str:
-    return "Transcribed text for this chunk"
+    stt = speech_to_text_api(audio_chunk)
+    print(stt)
+    return stt
 
 def dummy_llm(text: str) -> str:
-    return "LLM feedback based on the transcribed text"
+    agentresp = invoke_inmeet_agent(text)
+    return agentresp
 
 st.title("🎧 Audio Chunk Analyzer")
 
@@ -34,6 +39,7 @@ if uploaded_file:
         progress_bar = st.progress(0)
         transcripts = []
         feedbacks = []
+        chunk_placeholder = st.empty()
 
         for i in range(total_chunks):
             start = i * chunk_duration_ms
@@ -41,7 +47,7 @@ if uploaded_file:
             chunk = audio[start:end]
 
             # Simulate processing time
-            time.sleep(1)
+            time.sleep(3)
 
             # Call your actual STT and LLM functions here
             transcript = dummy_stt(chunk)
@@ -49,12 +55,11 @@ if uploaded_file:
 
             transcripts.append(transcript)
             feedbacks.append(feedback)
-
-            st.write(f"🧾 **Chunk {i+1}**")
-            st.write(f"- **Transcript:** {transcript}")
-            st.write(f"- **Feedback:** {feedback}")
-            st.divider()
-
+            chunk_placeholder.markdown(f"""
+                      ### 🧾 Processing Chunk {i + 1}/{total_chunks}
+                      - **Transcript:** {transcript}
+                      - **Feedback:** {feedback}
+                      """)
             progress_bar.progress((i + 1) / total_chunks)
 
         st.success("✅ Done processing all chunks.")
