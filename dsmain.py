@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import os
 import time
 import concurrent.futures
@@ -9,7 +10,7 @@ import sys
 import base64
 import tempfile
 from functools import partial
-
+import pandas as pd
 # Configure FFmpeg paths
 ffmpeg_path = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin"
 os.environ["PATH"] += os.pathsep + ffmpeg_path
@@ -24,7 +25,7 @@ AudioSegment.converter = f"{ffmpeg_path}/ffmpeg"
 AudioSegment.ffprobe = f"{ffmpeg_path}/ffprobe"
 
 # Import other project modules
-from gsutil import read_schedule_from_gcs, read_notification_history_from_gcs
+from gsutil import read_schedule_from_gcs, read_notification_history_from_gcs_new
 from premeet_agent_test import invoke_premeet_agent
 from inmeetagent_test import invoke_inmeet_agent
 from postmeetagent_test import invoke_postmeet_agent
@@ -34,6 +35,9 @@ from s2tconcur import process_chunk
 if 'notifications_data' not in st.session_state:
     st.session_state.notifications_data = None
 
+def get_image_base64(path):
+    with open(path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode()
 
 def extract_tone_sentiment(text):
     import re
@@ -149,29 +153,7 @@ def parallel_audio_processing(audio, chunk_duration_ms=2000, max_workers=20):
 # Page config and UI setup
 st.set_page_config(page_title="Advisor AI Copilot Dashboard", layout="wide")
 
-# Read the image and encode it in base64
-with open("Citi_1.png", "rb") as image_file:
-    encoded = base64.b64encode(image_file.read()).decode()
-    # Inject image via HTML with CSS positioning
-    st.markdown(
-        f"""
-        <style>
-        .fixed-logo {{
-            position: fixed;
-            top: 15px;
-            left: 15px;
-            z-index: 100;
-        }}
-        .fixed-logo img {{
-            height: 50px;
-        }}
-        </style>
-        <div class="fixed-logo">
-            <img src="data:image/png;base64,{encoded}" />
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+
 # Title
 st.markdown("""
     <h1 style='text-align: center; color: #1E3A8A;'>Citi Digital Experts</h1>
@@ -179,24 +161,45 @@ st.markdown("""
 """, unsafe_allow_html=True)
 st.markdown("---")
 
+
 col1, col2, col3 = st.columns([1, 2, 2])
 
 with col1:
-    st.markdown("### Welcome <span style='color:#1E3A8A;'>John Smith</span>", unsafe_allow_html=True)
-    st.markdown("You are logged into Common branch")
-    st.markdown("**Role:** Wealth Advisor")
-    st.markdown("**Region:** APAC")
-    st.markdown("Your last access was on 6 August 2025 at 12:29:58 PM")
-    st.markdown("---")
+    # Define your HTML div with styling
+    welcome_div = """
+    <div style='
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    '>
+        <h4 style='color: #1E3A8A;'>Welcome John Smith</h4>
+        <p>You are logged into Common branch</p>
+        <p><strong>Role:</strong> Wealth Advisor</p>
+        <p><strong>Region:</strong> APAC</p>
+        <hr style='border: 1px solid #ddd;'>
+        <h3>Today's Meetings</h3>
+        {meetings_content}
+    </div>
+    """
 
-    st.markdown("### Today's Meetings")
+    # Generate meetings content
     bucket_name = "digexpbuckselfdata"
     schedule = read_schedule_from_gcs(bucket_name, "meetings.csv")
+    meetings_content = "<br>".join(
+        f"<strong>{item['time']}</strong> - {item['client']} (Age {item['age']})"
+        for item in schedule
+    )
 
-for item in schedule:
-    st.markdown(f"**{item['time']}** - {item['client']} (Age {item['age']})")
+    # Render the div with dynamic content
+    st.markdown(
+        welcome_div.format(meetings_content=meetings_content),
+        unsafe_allow_html=True
+    )
 
 with col2:
+    container2 = st.container()
     st.markdown("### Pre-Meeting AI Agent")
     client_list = ["---Select---"] + [x["client"] for x in schedule]
     selected_client = st.selectbox("Select a client:", client_list)
@@ -208,25 +211,42 @@ with col2:
     st.markdown("### Always-On Service Dashboard")
     st.markdown("#### 🧠 Recently Sent Nudges to Clients (Last 7 Days)")
 
-    # Load notifications if not already loaded
+    # Initialize if not exists
+    if 'notifications_data' not in st.session_state:
+        st.session_state.notifications_data = None
+
+    # Load notifications if not loaded
     if st.session_state.notifications_data is None:
         with st.spinner("Loading notifications..."):
-            st.session_state.notifications_data = read_notification_history_from_gcs(bucket_name)
+            st.session_state.notifications_data = read_notification_history_from_gcs_new(bucket_name)
 
     # Refresh button
     if st.button("🔄 Refresh Notifications"):
         with st.spinner("Refreshing notifications..."):
-            st.session_state.notifications_data = read_notification_history_from_gcs(bucket_name)
+            st.session_state.notifications_data = read_notification_history_from_gcs_new(bucket_name)
 
-    # Display notifications
-    if not st.session_state.notifications_data.empty:
-        for _, row in st.session_state.notifications_data.iterrows():
-            st.markdown(
-                f"##### {row.get('notification_sent_date')}: {'📧' if row.get('notification_type') == 'email' else '📩'} {row.get('message_content')}")
+    # Display notifications with proper null checks
+    if st.session_state.notifications_data is None:
+        st.warning("Notifications data not loaded yet")
+    elif isinstance(st.session_state.notifications_data, pd.DataFrame):
+        if st.session_state.notifications_data.empty:
+            st.info("No notification history found for the last 7 days.")
+        else:
+            # Convert timestamp to readable date
+            st.session_state.notifications_data['notification_date'] = \
+                st.session_state.notifications_data['notification_sent_date'].dt.strftime('%Y-%m-%d %H:%M')
+
+            # Display each notification
+            for _, row in st.session_state.notifications_data.iterrows():
+                icon = "📧" if row.get('notification_type') == 'email' else "📩"
+                with st.expander(f"{icon} {row['notification_date']} - {row['client_name']}"):
+                    st.markdown(f"**Type:** {row.get('notification_type', 'N/A')}")
+                    st.markdown(f"**Message:** {row['message_content']}")
     else:
-        st.info("No notification history found for the last 7 days.")
+        st.error("Invalid notifications data format")
 
 with col3:
+    container3 = st.container()
     st.markdown("### In-Meeting AI Agent")
     uploaded_file = st.file_uploader("Choose an audio file", type=["mp3", "wav"])
 

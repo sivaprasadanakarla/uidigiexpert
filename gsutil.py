@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from io import StringIO
 from google.cloud import storage
-
+import os
 
 def read_schedule_from_gcs(bucket_name, source_blob_name):
     """Reads a CSV file from a Google Cloud Storage bucket and returns the data as a list of dictionaries.
@@ -45,6 +45,40 @@ def read_schedule_from_gcs(bucket_name, source_blob_name):
         print(f"An error occurred: {e}")
         return []
 
+
+def read_notification_history_from_gcs_new(bucket_name: str) -> pd.DataFrame:
+    """Always returns a DataFrame, never None"""
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob("notification_sent.csv")
+
+        if not blob.exists():
+            return pd.DataFrame(columns=[
+                'notification_sent_date',
+                'client_name',
+                'message_content'
+            ])
+
+        temp_path = "/tmp/notification_sent.csv"
+        blob.download_to_filename(temp_path)
+        df = pd.read_csv(temp_path, parse_dates=['timestamp'])
+        os.remove(temp_path)
+
+        # Ensure we have required columns
+        if not {'timestamp', 'client_name', 'message'}.issubset(df.columns):
+            return pd.DataFrame()
+
+        # Filter last 7 days and rename columns
+        cutoff = datetime.now() - timedelta(days=7)
+        return df[df['timestamp'] >= cutoff].rename(columns={
+            'timestamp': 'notification_sent_date',
+            'message': 'message_content'
+        })[['notification_sent_date', 'client_name', 'message_content']]
+
+    except Exception as e:
+        print(f"Error reading notifications: {e}")
+        return pd.DataFrame()  # Always return DataFrame, never None
 
 def read_notification_history_from_gcs(bucket_name: str, days_to_read: int = 7) -> pd.DataFrame:
     """
@@ -110,18 +144,8 @@ def read_notification_history_from_gcs(bucket_name: str, days_to_read: int = 7) 
 
 if __name__ == "__main__":
     """This block is executed only when the script is run directly."""
-    # --- Example Usage ---
-    # Replace with your bucket and file path
     bucket_name = "digexpbuckselfdata"
-    source_blob_name = "meetings.csv"
-
     # Call the function to get the schedule
-    schedule = read_schedule_from_gcs(bucket_name, source_blob_name)
+    schedule = read_notification_history_from_gcs_new(bucket_name)
+    print(schedule)
 
-    # Print the resulting schedule to verify
-    if schedule:
-        print("Schedule read from GCS:")
-        for appointment in schedule:
-            print(appointment)
-    else:
-        print("Failed to read schedule from GCS.")
