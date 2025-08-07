@@ -1,24 +1,39 @@
 import streamlit as st
 import os
-
-# Set environment variables before importing pydub
-
 import time
-import threading
+import concurrent.futures
 import numpy as np
 import matplotlib.pyplot as plt
 from io import BytesIO
+import sys
+import base64
+import tempfile
+from functools import partial
+
+# Configure FFmpeg paths
+ffmpeg_path = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin"
+os.environ["PATH"] += os.pathsep + ffmpeg_path
+sys.path.append(ffmpeg_path)
+os.environ["FFMPEG_PATH"] = f"{ffmpeg_path}/ffmpeg"
+os.environ["FFPROBE_PATH"] = f"{ffmpeg_path}/ffprobe"
+
+# Import pydub after setting paths
 from pydub import AudioSegment
+
+AudioSegment.converter = f"{ffmpeg_path}/ffmpeg"
+AudioSegment.ffprobe = f"{ffmpeg_path}/ffprobe"
+
+# Import other project modules
 from gsutil import read_schedule_from_gcs, read_notification_history_from_gcs
 from premeet_agent_test import invoke_premeet_agent
 from inmeetagent_test import invoke_inmeet_agent
 from postmeetagent_test import invoke_postmeet_agent
 from s2tconcur import process_chunk
-import base64
-# Configure ffmpeg path
-#AudioSegment.converter = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin/ffmpeg"
-#AudioSegment.ffprobe = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin/ffprobe"
-import re
+
+# Initialize session state for notifications if not exists
+if 'notifications_data' not in st.session_state:
+    st.session_state.notifications_data = None
+
 
 def extract_tone_sentiment(text):
     import re
@@ -77,8 +92,63 @@ def plot_waveform(samples, sample_rate, current_time_sec):
     ax.set_title("Audio Waveform")
     return fig
 
-# Page config
+def process_audio_chunk(chunk, start_time, progress_bar, feedback_container):
+    """Process a single audio chunk and update UI"""
+    try:
+        transcript = process_chunk(chunk)
+        feedback = invoke_inmeet_agent(transcript)
+        tone, sentiment = extract_tone_sentiment(feedback)
+
+        return {
+            "start": start_time,
+            "end": start_time + len(chunk),
+            "transcript": transcript,
+            "feedback": feedback,
+            "tone": tone,
+            "sentiment": sentiment
+        }
+    except Exception as e:
+        st.error(f"Error processing chunk: {e}")
+        return None
+
+
+def parallel_audio_processing(audio, chunk_duration_ms=2000, max_workers=20):
+    """Process audio in parallel chunks"""
+    total_chunks = len(audio) // chunk_duration_ms + 1
+    chunks = [(audio[i * chunk_duration_ms:(i + 1) * chunk_duration_ms], i * chunk_duration_ms)
+              for i in range(total_chunks)]
+
+    results = []
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = []
+        for chunk, start in chunks:
+            futures.append(executor.submit(
+                process_audio_chunk,
+                chunk,
+                start,
+                progress_bar,
+                feedback_container
+            ))
+
+        for i, future in enumerate(concurrent.futures.as_completed(futures)):
+            result = future.result()
+            if result:
+                results.append(result)
+            progress = (i + 1) / total_chunks
+            progress_bar.progress(progress)
+            status_text.text(f"Processed {i + 1}/{total_chunks} chunks")
+
+    # Sort by start time
+    results.sort(key=lambda x: x['start'])
+    return results
+
+
+# Page config and UI setup
 st.set_page_config(page_title="Advisor AI Copilot Dashboard", layout="wide")
+
 # Read the image and encode it in base64
 with open("Citi_1.png", "rb") as image_file:
     encoded = base64.b64encode(image_file.read()).decode()
@@ -123,8 +193,8 @@ with col1:
     bucket_name = "digexpbuckselfdata"
     schedule = read_schedule_from_gcs(bucket_name, "meetings.csv")
 
-    for item in schedule:
-        st.markdown(f"**{item['time']}** - {item['client']} (Age {item['age']})")
+for item in schedule:
+    st.markdown(f"**{item['time']}** - {item['client']} (Age {item['age']})")
 
 with col2:
     st.markdown("### Pre-Meeting AI Agent")
@@ -135,13 +205,24 @@ with col2:
         st.success(invoke_premeet_agent(selected_client))
     st.markdown("---")
 
-    st.markdown("### Always-On  Service Dashboard")
+    st.markdown("### Always-On Service Dashboard")
     st.markdown("#### 🧠 Recently Sent Nudges to Clients (Last 7 Days)")
 
-    notifications_df = read_notification_history_from_gcs(bucket_name)
-    if not notifications_df.empty:
-        for _, row in notifications_df.iterrows():
-            st.markdown(f"##### {row.get('notification_sent_date')}: {'📧' if row.get('notification_type') == 'email' else '📩'} {row.get('message_content')}")
+    # Load notifications if not already loaded
+    if st.session_state.notifications_data is None:
+        with st.spinner("Loading notifications..."):
+            st.session_state.notifications_data = read_notification_history_from_gcs(bucket_name)
+
+    # Refresh button
+    if st.button("🔄 Refresh Notifications"):
+        with st.spinner("Refreshing notifications..."):
+            st.session_state.notifications_data = read_notification_history_from_gcs(bucket_name)
+
+    # Display notifications
+    if not st.session_state.notifications_data.empty:
+        for _, row in st.session_state.notifications_data.iterrows():
+            st.markdown(
+                f"##### {row.get('notification_sent_date')}: {'📧' if row.get('notification_type') == 'email' else '📩'} {row.get('message_content')}")
     else:
         st.info("No notification history found for the last 7 days.")
 
@@ -151,69 +232,94 @@ with col3:
 
     waveform_plot = st.empty()
     feedback_container = st.container()
-    progress_bar = st.progress(0)
+    summary_container = st.container()
 
     if uploaded_file:
-        st.audio(uploaded_file, format="audio/mp3")
-        if 'stop_processing' not in st.session_state:
-            st.session_state.stop_processing = False
+        # Initialize session state
+        if 'audio_data' not in st.session_state:
+            st.session_state.audio_data = None
+            st.session_state.precomputed_data = None
+            st.session_state.playback_active = False
+            st.session_state.start_time = 0
+            st.session_state.current_chunk = 0
+            st.session_state.postmeetresponse = None
 
-        col1, col2 = st.columns(2)
+        # Load audio using temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
+            tmp_file.write(uploaded_file.getvalue())
+            tmp_path = tmp_file.name
 
-        with col1:
-            if st.button("▶️ Start Processing"):
-                st.session_state.stop_processing = False
-                st.info("Processing audio in 2-second chunks...")
+        try:
+            audio = AudioSegment.from_file(tmp_path)
+            st.session_state.audio_data = audio
+            st.session_state.audio_duration = len(audio) / 1000
+            st.audio(tmp_path, format="audio/mp3")
 
-        with col2:
-            if st.button("🛑 Stop Processing"):
-                st.session_state.stop_processing = True
+            # Parallel processing button
+            if st.button("🔍 Process Audio (20 threads)") and not st.session_state.precomputed_data:
+                with st.spinner("Processing audio with 20 parallel threads..."):
+                    st.session_state.precomputed_data = parallel_audio_processing(audio)
+                    st.success("Audio processing complete!")
 
+            # Playback controls
+            if st.session_state.precomputed_data:
+                if not st.session_state.playback_active:
+                    if st.button("▶️ Start Playback"):
+                        st.session_state.playback_active = True
+                        st.session_state.start_time = time.time()
+                        st.session_state.current_chunk = 0
+                else:
+                    if st.button("⏸️ Pause Playback"):
+                        st.session_state.playback_active = False
 
-            # Load audio
-        audio = AudioSegment.from_file(BytesIO(uploaded_file.getvalue()))
+                # Real-time display during playback
+                if st.session_state.playback_active:
+                    elapsed = time.time() - st.session_state.start_time
+                    current_chunk = min(int(elapsed // 2), len(st.session_state.precomputed_data) - 1)
 
-        chunk_duration_ms = 2000  # 2 seconds
-        total_chunks = len(audio) // chunk_duration_ms
+                    if current_chunk != st.session_state.current_chunk:
+                        st.session_state.current_chunk = current_chunk
+                        data = st.session_state.precomputed_data[current_chunk]
 
-        progress_bar = st.progress(0)
-        transcripts = []
-        feedbacks = []
-        chunk_placeholder = st.empty()
+                        # Update waveform
+                        samples = get_waveform(audio)
+                        fig = plot_waveform(samples, audio.frame_rate, elapsed)
+                        waveform_plot.pyplot(fig)
 
-        for i in range(total_chunks):
-            start = i * chunk_duration_ms
-            end = start + chunk_duration_ms
-            chunk = audio[start:end]
-            if st.session_state.stop_processing:
-                st.warning("🚫 Processing was stopped by the user.")
-                postmeetresponse = invoke_postmeet_agent(''.join(transcripts))
-                st.markdown(f"###{ postmeetresponse}")
-                break
-                # Simulate processing time
-            time.sleep(3)
+                        # Update feedback
+                        with feedback_container:
+                            st.markdown(f"""
+                            **Segment {current_chunk + 1} ({data['start'] // 1000}-{data['end'] // 1000}s)**
+                            - **Transcript:** {data['transcript']}
+                            - **Tone:** `{data['tone']}` {get_tone_emoji(data['tone'])}
+                            - **Sentiment:** `{data['sentiment']}` {get_sentiment_emoji(data['sentiment'])}
+                            - **Feedback:** {data['feedback']}
+                            """)
 
-            # Call your actual STT and LLM functions here
-            transcript = process_chunk(chunk)
-            feedback = invoke_inmeet_agent(transcript)
+                        time.sleep(0.1)
+                        st.rerun()
 
-            transcripts.append(transcript)
-            feedbacks.append(feedback)
-            tone, sentiment = extract_tone_sentiment(feedback)
-            tone_emoji = get_tone_emoji(tone)
-            sentiment_emoji = get_sentiment_emoji(sentiment)
+                    # Check if playback complete
+                    if elapsed >= st.session_state.audio_duration:
+                        st.session_state.playback_active = False
+                        st.success("✅ Meeting playback complete!")
 
-            chunk_placeholder.markdown(f"""
-                - **Tone:** `{tone}`  
-                  ### {tone_emoji}
-                - **Sentiment:** `{sentiment}`  
-                  ### {sentiment_emoji}
-                """)
-            progress_bar.progress((i + 1) / total_chunks)
+                # Add separate button for post-meeting summary
+                if st.button("📄 Generate Post-Meeting Summary"):
+                    with st.spinner("Generating meeting summary..."):
+                        full_transcript = "\n".join([d["transcript"] for d in st.session_state.precomputed_data])
+                        st.session_state.postmeetresponse = invoke_postmeet_agent(full_transcript)
+                        st.rerun()
 
-            #st.success("✅ Done processing all chunks.")
+            # Display post-meeting summary if available
+            if 'postmeetresponse' in st.session_state:
+                with summary_container:
+                    st.markdown("### Post-Meeting Summary")
+                    st.write(st.session_state.postmeetresponse)
 
-
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
 # Footer
 st.markdown("""
