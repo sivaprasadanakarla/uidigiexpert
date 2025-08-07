@@ -38,6 +38,8 @@ if 'notifications_data' not in st.session_state:
 def get_image_base64(path):
     with open(path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode()
+# Convert your logo (adjust path as needed)
+logo_base64 = get_image_base64("Citi_1.png")
 
 def extract_tone_sentiment(text):
     import re
@@ -154,11 +156,18 @@ def parallel_audio_processing(audio, chunk_duration_ms=2000, max_workers=20):
 st.set_page_config(page_title="Advisor AI Copilot Dashboard", layout="wide")
 
 
-# Title
-st.markdown("""
-    <h1 style='text-align: center; color: #1E3A8A;'>Citi Digital Experts</h1>
-    <h4 style='text-align: center; color: gray;'>Empowering advisors with actionable insights and real-time assistance</h4>
-""", unsafe_allow_html=True)
+# Create title with logo
+st.markdown(f"""
+    <div style='text-align: center;'>
+        <h2 style='color: #1E3A8A; display: inline-flex; align-items: center; justify-content: center;'>
+            <img src="data:image/png;base64,{logo_base64}" style='height: 60px; margin-right: 10px;'> 
+            Digital Experts
+        </h2>
+        <h5 style='color: gray;'>Empowering advisors with actionable insights and real-time assistance</h4>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 st.markdown("---")
 
 

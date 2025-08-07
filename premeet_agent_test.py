@@ -17,7 +17,7 @@ def invoke_premeet_agent(client_name: str) -> str:
              or an error message if the agent fails.
     """
     agent_engine_id = "5929191219572768768"
-    user_input = f"prepare me for a meeting with {client_name}"
+    user_input = f"Pre-Meeting Brief for  {client_name}"
 
     try:
         # Get the agent engine and create a new session
