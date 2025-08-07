@@ -29,6 +29,7 @@ from gsutil import read_schedule_from_gcs, read_notification_history_from_gcs_ne
 from premeet_agent_test import invoke_premeet_agent
 from inmeetagent_test import invoke_inmeet_agent
 from postmeetagent_test import invoke_postmeet_agent
+from genericagent_test import invoke_generic_agent
 from s2tconcur import process_chunk
 
 # Initialize session state for notifications if not exists
@@ -152,9 +153,10 @@ def parallel_audio_processing(audio, chunk_duration_ms=2000, max_workers=20):
     return results
 
 
+# [Previous imports remain exactly the same...]
+
 # Page config and UI setup
 st.set_page_config(page_title="Advisor AI Copilot Dashboard", layout="wide")
-
 
 # Create title with logo
 st.markdown(f"""
@@ -166,47 +168,63 @@ st.markdown(f"""
         <h5 style='color: gray;'>Empowering advisors with actionable insights and real-time assistance</h4>
     </div>
     """,
-    unsafe_allow_html=True
-)
+            unsafe_allow_html=True
+            )
 st.markdown("---")
 
-
-col1, col2, col3 = st.columns([1, 2, 2])
-
+#col1, col2, col3 = st.columns([1, 2, 2])
+col1, col2, col3 = st.columns([1.8, 2, 1], gap="small")
 with col1:
-    # Define your HTML div with styling
-    welcome_div = """
-    <div style='
-        background-color: #f8f9fa;
-        padding: 20px;
-        border-radius: 10px;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    '>
-        <h4 style='color: #1E3A8A;'>Welcome John Smith</h4>
-        <p>You are logged into Common branch</p>
-        <p><strong>Role:</strong> Wealth Advisor</p>
-        <p><strong>Region:</strong> APAC</p>
-        <hr style='border: 1px solid #ddd;'>
-        <h3>Today's Meetings</h3>
-        {meetings_content}
-    </div>
-    """
+    # Initialize chat history if not exists
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+    # Chat Assistant Section
+    st.markdown("### AI Chat Assistant")
 
-    # Generate meetings content
+    # Display chat history
+    chat_container = st.container(height=300)
+    with chat_container:
+        for message in st.session_state.chat_history:
+            if message['role'] == 'user':
+                st.markdown(f"""
+                <div style='background-color: #e3f2fd; padding: 10px; border-radius: 10px; margin-bottom: 10px;'>
+                    <strong>You:</strong> {message['content']}
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div style='background-color: #f5f5f5; padding: 10px; border-radius: 10px; margin-bottom: 10px;'>
+                    <strong>AI:</strong> {message['content']}
+                </div>
+                """, unsafe_allow_html=True)
+
+    # Chat input
+    user_input = st.chat_input("Type your message here...")
+
+    if user_input:
+        # Add user message to chat history
+        st.session_state.chat_history.append({'role': 'user', 'content': user_input})
+
+        # Here you would call your actual AI agent
+        # For demonstration, we'll use a placeholder response
+        #ai_response = f"I received your message: '{user_input}'. This would be replaced with your actual AI agent response."
+        ai_response = invoke_generic_agent(user_input)
+        # Add AI response to chat history
+        st.session_state.chat_history.append({'role': 'ai', 'content': ai_response})
+
+        # Rerun to update the chat display
+        st.rerun()
+    # Today's Meetings section
+    st.markdown("### Today's Meetings")
     bucket_name = "digexpbuckselfdata"
     schedule = read_schedule_from_gcs(bucket_name, "meetings.csv")
-    meetings_content = "<br>".join(
-        f"<strong>{item['time']}</strong> - {item['client']} (Age {item['age']})"
-        for item in schedule
-    )
+    for item in schedule:
+        st.markdown(f"**{item['time']}** - {item['client']} (Age {item['age']})")
+    st.markdown("---")
 
-    # Render the div with dynamic content
-    st.markdown(
-        welcome_div.format(meetings_content=meetings_content),
-        unsafe_allow_html=True
-    )
 
+
+# [Rest of the code remains EXACTLY THE SAME from col2 onward...]
 with col2:
     container2 = st.container()
     st.markdown("### Pre-Meeting AI Agent")
@@ -217,7 +235,6 @@ with col2:
         st.success(invoke_premeet_agent(selected_client))
     st.markdown("---")
 
-    st.markdown("### Always-On Service Dashboard")
     st.markdown("#### 🧠 Recently Sent Nudges to Clients (Last 7 Days)")
 
     # Initialize if not exists
