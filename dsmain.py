@@ -36,12 +36,6 @@ from s2tconcur import process_chunk
 if 'notifications_data' not in st.session_state:
     st.session_state.notifications_data = None
 
-def get_image_base64(path):
-    with open(path, "rb") as image_file:
-        return base64.b64encode(image_file.read()).decode()
-# Convert your logo (adjust path as needed)
-logo_base64 = get_image_base64("Citi_1.png")
-
 def extract_tone_sentiment(text):
     import re
     match = re.search(r"Tone:\s*(\w+)\s+Sentiment:\s*(\w+)", text)
@@ -162,7 +156,6 @@ st.set_page_config(page_title="Advisor AI Copilot Dashboard", layout="wide")
 st.markdown(f"""
     <div style='text-align: center;'>
         <h2 style='color: #1E3A8A; display: inline-flex; align-items: center; justify-content: center;'>
-            <img src="data:image/png;base64,{logo_base64}" style='height: 60px; margin-right: 10px;'> 
             Digital Experts
         </h2>
         <h5 style='color: gray;'>Empowering advisors with actionable insights and real-time assistance</h4>
@@ -370,5 +363,5 @@ with col3:
 # Footer
 st.markdown("""
     <hr style='border: 1px solid #ccc;'>
-    <p style='text-align: center; color: #888;'>© 2025 Citibank Digital Experts | Powered by Google Cloud</p>
+    <p style='text-align: center; color: #888;'>© 2025 Digital Experts | Powered by Google Cloud</p>
 """, unsafe_allow_html=True)
