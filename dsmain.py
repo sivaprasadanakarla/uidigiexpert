@@ -12,17 +12,17 @@ import tempfile
 from functools import partial
 import pandas as pd
 # Configure FFmpeg paths
-ffmpeg_path = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin"
-os.environ["PATH"] += os.pathsep + ffmpeg_path
-sys.path.append(ffmpeg_path)
-os.environ["FFMPEG_PATH"] = f"{ffmpeg_path}/ffmpeg"
-os.environ["FFPROBE_PATH"] = f"{ffmpeg_path}/ffprobe"
+#ffmpeg_path = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin"
+#os.environ["PATH"] += os.pathsep + ffmpeg_path
+#sys.path.append(ffmpeg_path)
+#os.environ["FFMPEG_PATH"] = f"{ffmpeg_path}/ffmpeg"
+#os.environ["FFPROBE_PATH"] = f"{ffmpeg_path}/ffprobe"
 
 # Import pydub after setting paths
 from pydub import AudioSegment
 
-AudioSegment.converter = f"{ffmpeg_path}/ffmpeg"
-AudioSegment.ffprobe = f"{ffmpeg_path}/ffprobe"
+#AudioSegment.converter = f"{ffmpeg_path}/ffmpeg"
+#AudioSegment.ffprobe = f"{ffmpeg_path}/ffprobe"
 
 # Import other project modules
 from gsutil import read_schedule_from_gcs, read_notification_history_from_gcs_new
@@ -206,7 +206,7 @@ st.markdown("""
 st.markdown(f"""
     <div style='text-align: center;'>
         <h2 style='color: #1E3A8A; display: inline-flex; align-items: center; justify-content: center;'>
-            Digital Experts
+            AIdvisor 360°
         </h2>
         <h5 style='color: gray;'>Empowering advisors with actionable insights and real-time assistance</h4>
     </div>
