@@ -12,17 +12,17 @@ import tempfile
 from functools import partial
 import pandas as pd
 # Configure FFmpeg paths
-ffmpeg_path = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin"
-os.environ["PATH"] += os.pathsep + ffmpeg_path
-sys.path.append(ffmpeg_path)
-os.environ["FFMPEG_PATH"] = f"{ffmpeg_path}/ffmpeg"
-os.environ["FFPROBE_PATH"] = f"{ffmpeg_path}/ffprobe"
+#ffmpeg_path = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin"
+#os.environ["PATH"] += os.pathsep + ffmpeg_path
+#sys.path.append(ffmpeg_path)
+#os.environ["FFMPEG_PATH"] = f"{ffmpeg_path}/ffmpeg"
+#os.environ["FFPROBE_PATH"] = f"{ffmpeg_path}/ffprobe"
 
 # Import pydub after setting paths
 from pydub import AudioSegment
 
-AudioSegment.converter = f"{ffmpeg_path}/ffmpeg"
-AudioSegment.ffprobe = f"{ffmpeg_path}/ffprobe"
+#AudioSegment.converter = f"{ffmpeg_path}/ffmpeg"
+#AudioSegment.ffprobe = f"{ffmpeg_path}/ffprobe"
 
 # Import other project modules
 from gsutil import read_schedule_from_gcs, read_notification_history_from_gcs_new
@@ -152,6 +152,43 @@ def parallel_audio_processing(audio, chunk_duration_ms=2000, max_workers=20):
 # Page config and UI setup
 st.set_page_config(page_title="Advisor AI Copilot Dashboard", layout="wide")
 
+st.markdown("""
+<style>
+    /* Main tab container */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        margin-bottom: 20px;
+    }
+
+    /* Individual tabs */
+    .stTabs [data-baseweb="tab"] {
+        height: 60px;  /* Makes tabs taller */
+        padding: 0 35px;  /* Wider tabs */
+        background-color: #F8F9FA;
+        border-radius: 12px 12px 0 0;
+        font-weight: 900;
+        font-size: 30px;  /* Larger text */
+        color: #1E3A8A !important;  /* Deep blue text */
+        border: 2px solid #E5E7EB;
+        transition: all 0.3s ease;
+    }
+
+    /* Active tab */
+    .stTabs [aria-selected="true"] {
+        background-color: white !important;
+        color: #1E3A8A !important;
+        border-bottom: 4px solid #1E3A8A;
+        font-size: 22px;  /* Slightly bigger when active */
+    }
+
+    /* Hover effect */
+    .stTabs [data-baseweb="tab"]:hover {
+        transform: scale(1.05);
+        transition: all 0.2s ease;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # Create title with logo
 st.markdown(f"""
     <div style='text-align: center;'>
@@ -166,47 +203,18 @@ st.markdown(f"""
 st.markdown("---")
 
 #col1, col2, col3 = st.columns([1, 2, 2])
-col1, col2, col3 = st.columns([1.8, 2, 1], gap="small")
+#col1, col2, col3 = st.columns([1.8, 2, 1], gap="small")
+col1, tab_holder = st.columns([1.2, 2])
+#ab1, tab2 = st.tabs(["Pre-Meeting Agent", "In-Meeting Agent"])
 with col1:
     # Initialize chat history if not exists
-    if 'chat_history' not in st.session_state:
-        st.session_state.chat_history = []
-    # Chat Assistant Section
-    st.markdown("### AI Chat Assistant")
 
-    # Display chat history
-    chat_container = st.container(height=300)
-    with chat_container:
-        for message in st.session_state.chat_history:
-            if message['role'] == 'user':
-                st.markdown(f"""
-                <div style='background-color: #e3f2fd; padding: 10px; border-radius: 10px; margin-bottom: 10px;'>
-                    <strong>You:</strong> {message['content']}
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                <div style='background-color: #f5f5f5; padding: 10px; border-radius: 10px; margin-bottom: 10px;'>
-                    <strong>AI:</strong> {message['content']}
-                </div>
-                """, unsafe_allow_html=True)
-
-    # Chat input
-    user_input = st.chat_input("Type your message here...")
-
-    if user_input:
-        # Add user message to chat history
-        st.session_state.chat_history.append({'role': 'user', 'content': user_input})
-
-        # Here you would call your actual AI agent
-        # For demonstration, we'll use a placeholder response
-        #ai_response = f"I received your message: '{user_input}'. This would be replaced with your actual AI agent response."
-        ai_response = invoke_generic_agent(user_input)
-        # Add AI response to chat history
-        st.session_state.chat_history.append({'role': 'ai', 'content': ai_response})
-
-        # Rerun to update the chat display
-        st.rerun()
+    st.markdown("### Welcome <span style='color:#1E3A8A;'>John Smith</span>", unsafe_allow_html=True)
+    st.markdown("You are logged into Common branch")
+    st.markdown("**Role:** Wealth Advisor")
+    st.markdown("**Region:** APAC")
+    st.markdown("Your last access was on 6 August 2025 at 12:29:58 PM")
+    st.markdown("---")
     # Today's Meetings section
     st.markdown("### Today's Meetings")
     bucket_name = "digexpbuckselfdata"
@@ -215,153 +223,189 @@ with col1:
         st.markdown(f"**{item['time']}** - {item['client']} (Age {item['age']})")
     st.markdown("---")
 
+with tab_holder:
+    tab1, tab2, tab3 = st.tabs(["📋 Pre-Meeting Agent", "💬 In-Meeting & Post-Meeting Agents", "🤖✨AI Chat Assistant"])
+    with tab1:
+        container2 = st.container()
+        st.markdown("### Pre-Meeting AI Agent")
+        client_list = ["---Select---"] + [x["client"] for x in schedule]
+        selected_client = st.selectbox("Select a client:", client_list)
+        if selected_client and selected_client != "---Select---":
+            st.info(f"Fetching insights for **{selected_client}**...")
+            st.success(invoke_premeet_agent(selected_client))
+        st.markdown("---")
 
+        st.markdown("#### 🧠 Recently Sent Nudges to Clients (Last 7 Days)")
 
-# [Rest of the code remains EXACTLY THE SAME from col2 onward...]
-with col2:
-    container2 = st.container()
-    st.markdown("### Pre-Meeting AI Agent")
-    client_list = ["---Select---"] + [x["client"] for x in schedule]
-    selected_client = st.selectbox("Select a client:", client_list)
-    if selected_client and selected_client != "---Select---":
-        st.info(f"Fetching insights for **{selected_client}**...")
-        st.success(invoke_premeet_agent(selected_client))
-    st.markdown("---")
+        # Initialize if not exists
+        if 'notifications_data' not in st.session_state:
+            st.session_state.notifications_data = None
 
-    st.markdown("#### 🧠 Recently Sent Nudges to Clients (Last 7 Days)")
+        # Load notifications if not loaded
+        if st.session_state.notifications_data is None:
+            with st.spinner("Loading notifications..."):
+                st.session_state.notifications_data = read_notification_history_from_gcs_new(bucket_name)
 
-    # Initialize if not exists
-    if 'notifications_data' not in st.session_state:
-        st.session_state.notifications_data = None
+        # Refresh button
+        if st.button("🔄 Refresh Notifications"):
+            with st.spinner("Refreshing notifications..."):
+                st.session_state.notifications_data = read_notification_history_from_gcs_new(bucket_name)
 
-    # Load notifications if not loaded
-    if st.session_state.notifications_data is None:
-        with st.spinner("Loading notifications..."):
-            st.session_state.notifications_data = read_notification_history_from_gcs_new(bucket_name)
+        # Display notifications with proper null checks
+        if st.session_state.notifications_data is None:
+            st.warning("Notifications data not loaded yet")
+        elif isinstance(st.session_state.notifications_data, pd.DataFrame):
+            if st.session_state.notifications_data.empty:
+                st.info("No notification history found for the last 7 days.")
+            else:
+                # Convert timestamp to readable date
+                st.session_state.notifications_data['notification_date'] = \
+                    st.session_state.notifications_data['notification_sent_date'].dt.strftime('%Y-%m-%d %H:%M')
 
-    # Refresh button
-    if st.button("🔄 Refresh Notifications"):
-        with st.spinner("Refreshing notifications..."):
-            st.session_state.notifications_data = read_notification_history_from_gcs_new(bucket_name)
-
-    # Display notifications with proper null checks
-    if st.session_state.notifications_data is None:
-        st.warning("Notifications data not loaded yet")
-    elif isinstance(st.session_state.notifications_data, pd.DataFrame):
-        if st.session_state.notifications_data.empty:
-            st.info("No notification history found for the last 7 days.")
+                # Display each notification
+                for _, row in st.session_state.notifications_data.iterrows():
+                    icon = "📧" if row.get('notification_type') == 'email' else "📩"
+                    with st.expander(f"{icon} {row['notification_date']} - {row['client_name']}"):
+                        st.markdown(f"**Type:** {row.get('notification_type', 'N/A')}")
+                        st.markdown(f"**Message:** {row['message_content']}")
         else:
-            # Convert timestamp to readable date
-            st.session_state.notifications_data['notification_date'] = \
-                st.session_state.notifications_data['notification_sent_date'].dt.strftime('%Y-%m-%d %H:%M')
+            st.error("Invalid notifications data format")
 
-            # Display each notification
-            for _, row in st.session_state.notifications_data.iterrows():
-                icon = "📧" if row.get('notification_type') == 'email' else "📩"
-                with st.expander(f"{icon} {row['notification_date']} - {row['client_name']}"):
-                    st.markdown(f"**Type:** {row.get('notification_type', 'N/A')}")
-                    st.markdown(f"**Message:** {row['message_content']}")
-    else:
-        st.error("Invalid notifications data format")
+    with tab2:
+        container3 = st.container()
+        st.markdown("### In-Meeting AI Agent")
+        uploaded_file = st.file_uploader("Choose an audio file", type=["mp3", "wav"])
 
-with col3:
-    container3 = st.container()
-    st.markdown("### In-Meeting AI Agent")
-    uploaded_file = st.file_uploader("Choose an audio file", type=["mp3", "wav"])
+        waveform_plot = st.empty()
+        feedback_container = st.container()
+        summary_container = st.container()
 
-    waveform_plot = st.empty()
-    feedback_container = st.container()
-    summary_container = st.container()
+        if uploaded_file:
+            # Initialize session state
+            if 'audio_data' not in st.session_state:
+                st.session_state.audio_data = None
+                st.session_state.precomputed_data = None
+                st.session_state.playback_active = False
+                st.session_state.start_time = 0
+                st.session_state.current_chunk = 0
+                st.session_state.postmeetresponse = None
 
-    if uploaded_file:
-        # Initialize session state
-        if 'audio_data' not in st.session_state:
-            st.session_state.audio_data = None
-            st.session_state.precomputed_data = None
-            st.session_state.playback_active = False
-            st.session_state.start_time = 0
-            st.session_state.current_chunk = 0
-            st.session_state.postmeetresponse = None
+            # Load audio using temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
+                tmp_file.write(uploaded_file.getvalue())
+                tmp_path = tmp_file.name
 
-        # Load audio using temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
-            tmp_file.write(uploaded_file.getvalue())
-            tmp_path = tmp_file.name
+            try:
+                audio = AudioSegment.from_file(tmp_path)
+                st.session_state.audio_data = audio
+                st.session_state.audio_duration = len(audio) / 1000
+                st.audio(tmp_path, format="audio/mp3")
 
-        try:
-            audio = AudioSegment.from_file(tmp_path)
-            st.session_state.audio_data = audio
-            st.session_state.audio_duration = len(audio) / 1000
-            st.audio(tmp_path, format="audio/mp3")
+                # Parallel processing button
+                if st.button("🔍 Process Audio (20 threads)") and not st.session_state.precomputed_data:
+                    with st.spinner("Processing audio with 20 parallel threads..."):
+                        st.session_state.precomputed_data = parallel_audio_processing(audio)
+                        st.success("Audio processing complete!")
 
-            # Parallel processing button
-            if st.button("🔍 Process Audio (20 threads)") and not st.session_state.precomputed_data:
-                with st.spinner("Processing audio with 20 parallel threads..."):
-                    st.session_state.precomputed_data = parallel_audio_processing(audio)
-                    st.success("Audio processing complete!")
+                # Playback controls
+                if st.session_state.precomputed_data:
+                    if not st.session_state.playback_active:
+                        if st.button("▶️ Start Playback"):
+                            st.session_state.playback_active = True
+                            st.session_state.start_time = time.time()
+                            st.session_state.current_chunk = 0
+                    else:
+                        if st.button("⏸️ Pause Playback"):
+                            st.session_state.playback_active = False
 
-            # Playback controls
-            if st.session_state.precomputed_data:
-                if not st.session_state.playback_active:
-                    if st.button("▶️ Start Playback"):
-                        st.session_state.playback_active = True
-                        st.session_state.start_time = time.time()
-                        st.session_state.current_chunk = 0
+                    # Real-time display during playback
+                    if st.session_state.playback_active:
+                        elapsed = time.time() - st.session_state.start_time
+                        current_chunk = min(int(elapsed // 2), len(st.session_state.precomputed_data) - 1)
+
+                        if current_chunk != st.session_state.current_chunk:
+                            st.session_state.current_chunk = current_chunk
+                            data = st.session_state.precomputed_data[current_chunk]
+
+                            # Update waveform
+                            samples = get_waveform(audio)
+                            fig = plot_waveform(samples, audio.frame_rate, elapsed)
+                            waveform_plot.pyplot(fig)
+
+                            # Update feedback
+                            with feedback_container:
+                                st.markdown(f"""
+                                **Segment {current_chunk + 1} ({data['start'] // 1000}-{data['end'] // 1000}s)**
+                                - **Transcript:** {data['transcript']}
+                                - **Tone:** `{data['tone']}` {get_tone_emoji(data['tone'])}
+                                - **Sentiment:** `{data['sentiment']}` {get_sentiment_emoji(data['sentiment'])}
+                                - **Feedback:** {data['feedback']}
+                                """)
+
+                            time.sleep(0.1)
+                            st.rerun()
+
+                        # Check if playback complete
+                        if elapsed >= st.session_state.audio_duration:
+                            st.session_state.playback_active = False
+                            st.success("✅ Meeting playback complete!")
+
+                    # Add separate button for post-meeting summary
+                    if st.button("📄 Generate Post-Meeting Summary"):
+                        with st.spinner("Generating meeting summary..."):
+                            full_transcript = "\n".join([d["transcript"] for d in st.session_state.precomputed_data])
+                            st.session_state.postmeetresponse = invoke_postmeet_agent(full_transcript)
+                            st.rerun()
+
+                # Display post-meeting summary if available
+                if 'postmeetresponse' in st.session_state:
+                    with summary_container:
+                        st.markdown("### Post-Meeting Summary")
+                        st.write(st.session_state.postmeetresponse)
+
+            finally:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+    with tab3:
+        # Chat Assistant Section
+        st.markdown("### AI Chat Assistant")
+        if 'chat_history' not in st.session_state:
+            st.session_state.chat_history = []
+        # Display chat history
+        chat_container = st.container(height=300)
+        with chat_container:
+            for message in st.session_state.chat_history:
+                if message['role'] == 'user':
+                    st.markdown(f"""
+                       <div style='background-color: #e3f2fd; padding: 10px; border-radius: 10px; margin-bottom: 10px;'>
+                           <strong>You:</strong> {message['content']}
+                       </div>
+                       """, unsafe_allow_html=True)
                 else:
-                    if st.button("⏸️ Pause Playback"):
-                        st.session_state.playback_active = False
+                    st.markdown(f"""
+                       <div style='background-color: #f5f5f5; padding: 10px; border-radius: 10px; margin-bottom: 10px;'>
+                           <strong>AI:</strong> {message['content']}
+                       </div>
+                       """, unsafe_allow_html=True)
 
-                # Real-time display during playback
-                if st.session_state.playback_active:
-                    elapsed = time.time() - st.session_state.start_time
-                    current_chunk = min(int(elapsed // 2), len(st.session_state.precomputed_data) - 1)
+        # Chat input
+        user_input = st.chat_input("Type your message here...")
 
-                    if current_chunk != st.session_state.current_chunk:
-                        st.session_state.current_chunk = current_chunk
-                        data = st.session_state.precomputed_data[current_chunk]
+        if user_input:
+            # Add user message to chat history
+            st.session_state.chat_history.append({'role': 'user', 'content': user_input})
 
-                        # Update waveform
-                        samples = get_waveform(audio)
-                        fig = plot_waveform(samples, audio.frame_rate, elapsed)
-                        waveform_plot.pyplot(fig)
+            # Here you would call your actual AI agent
+            # For demonstration, we'll use a placeholder response
+            # ai_response = f"I received your message: '{user_input}'. This would be replaced with your actual AI agent response."
+            ai_response = invoke_generic_agent(user_input)
+            # Add AI response to chat history
+            st.session_state.chat_history.append({'role': 'ai', 'content': ai_response})
 
-                        # Update feedback
-                        with feedback_container:
-                            st.markdown(f"""
-                            **Segment {current_chunk + 1} ({data['start'] // 1000}-{data['end'] // 1000}s)**
-                            - **Transcript:** {data['transcript']}
-                            - **Tone:** `{data['tone']}` {get_tone_emoji(data['tone'])}
-                            - **Sentiment:** `{data['sentiment']}` {get_sentiment_emoji(data['sentiment'])}
-                            - **Feedback:** {data['feedback']}
-                            """)
-
-                        time.sleep(0.1)
-                        st.rerun()
-
-                    # Check if playback complete
-                    if elapsed >= st.session_state.audio_duration:
-                        st.session_state.playback_active = False
-                        st.success("✅ Meeting playback complete!")
-
-                # Add separate button for post-meeting summary
-                if st.button("📄 Generate Post-Meeting Summary"):
-                    with st.spinner("Generating meeting summary..."):
-                        full_transcript = "\n".join([d["transcript"] for d in st.session_state.precomputed_data])
-                        st.session_state.postmeetresponse = invoke_postmeet_agent(full_transcript)
-                        st.rerun()
-
-            # Display post-meeting summary if available
-            if 'postmeetresponse' in st.session_state:
-                with summary_container:
-                    st.markdown("### Post-Meeting Summary")
-                    st.write(st.session_state.postmeetresponse)
-
-        finally:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
-
-# Footer
-st.markdown("""
-    <hr style='border: 1px solid #ccc;'>
-    <p style='text-align: center; color: #888;'>© 2025 Digital Experts | Powered by Google Cloud</p>
-""", unsafe_allow_html=True)
+            # Rerun to update the chat display
+            st.rerun()
+    # Footer
+    st.markdown("""
+        <hr style='border: 1px solid #ccc;'>
+        <p style='text-align: center; color: #888;'>© 2025 Digital Experts | Powered by Code2Wealth</p>
+    """, unsafe_allow_html=True)
