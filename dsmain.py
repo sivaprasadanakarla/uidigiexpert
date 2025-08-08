@@ -12,17 +12,17 @@ import tempfile
 from functools import partial
 import pandas as pd
 # Configure FFmpeg paths
-#ffmpeg_path = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin"
-#os.environ["PATH"] += os.pathsep + ffmpeg_path
-#sys.path.append(ffmpeg_path)
-#os.environ["FFMPEG_PATH"] = f"{ffmpeg_path}/ffmpeg"
-#os.environ["FFPROBE_PATH"] = f"{ffmpeg_path}/ffprobe"
+ffmpeg_path = "/usr/local/Cellar/ffmpeg/7.1.1_3/bin"
+os.environ["PATH"] += os.pathsep + ffmpeg_path
+sys.path.append(ffmpeg_path)
+os.environ["FFMPEG_PATH"] = f"{ffmpeg_path}/ffmpeg"
+os.environ["FFPROBE_PATH"] = f"{ffmpeg_path}/ffprobe"
 
 # Import pydub after setting paths
 from pydub import AudioSegment
 
-#AudioSegment.converter = f"{ffmpeg_path}/ffmpeg"
-#AudioSegment.ffprobe = f"{ffmpeg_path}/ffprobe"
+AudioSegment.converter = f"{ffmpeg_path}/ffmpeg"
+AudioSegment.ffprobe = f"{ffmpeg_path}/ffprobe"
 
 # Import other project modules
 from gsutil import read_schedule_from_gcs, read_notification_history_from_gcs_new
@@ -151,7 +151,16 @@ def parallel_audio_processing(audio, chunk_duration_ms=2000, max_workers=20):
 
 # Page config and UI setup
 st.set_page_config(page_title="Advisor AI Copilot Dashboard", layout="wide")
-
+st.markdown("""  
+<style>  
+.block-container {  
+    padding-top: 1rem; /* Adjust this value as needed */  
+    padding-bottom: 0rem;  
+    padding-left: 5rem;  
+    padding-right: 5rem;  
+}  
+</style>  
+""", unsafe_allow_html=True)
 st.markdown("""
 <style>
     /* Main tab container */
@@ -161,31 +170,35 @@ st.markdown("""
     }
 
     /* Individual tabs */
-    .stTabs [data-baseweb="tab"] {
-        height: 60px;  /* Makes tabs taller */
-        padding: 0 35px;  /* Wider tabs */
-        background-color: #F8F9FA;
-        border-radius: 12px 12px 0 0;
-        font-weight: 900;
-        font-size: 30px;  /* Larger text */
-        color: #1E3A8A !important;  /* Deep blue text */
-        border: 2px solid #E5E7EB;
-        transition: all 0.3s ease;
-    }
+.stTabs [data-baseweb="tab"] {
+    height: 65px;  /* Slightly taller */
+    padding: 0 40px;  /* More horizontal space */
+    background-color: #F1F5F9;  /* Lighter base color */
+    border-radius: 12px 12px 0 0;
+    font-weight: 900;
+    font-size: 24px;
+    color: #1E3A8A !important;
+    border: 3px solid #CBD5E1;  /* Thicker border */
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);  /* Subtle depth */
+}
 
-    /* Active tab */
-    .stTabs [aria-selected="true"] {
-        background-color: white !important;
-        color: #1E3A8A !important;
-        border-bottom: 4px solid #1E3A8A;
-        font-size: 22px;  /* Slightly bigger when active */
-    }
+/* Active tab - More dramatic contrast */
+.stTabs [aria-selected="true"] {
+    background-color: #EFF6FF !important;  /* Light blue background */
+    color: #1D4ED8 !important;  /* Brighter blue text */
+    font-size: 26px;  /* Larger active text */
+    text-shadow: 0 1px 1px rgba(30, 58, 138, 0.2);  /* Text emphasis */
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);  /* "Lifted" effect */
+}
 
-    /* Hover effect */
-    .stTabs [data-baseweb="tab"]:hover {
-        transform: scale(1.05);
-        transition: all 0.2s ease;
-    }
+/* Hover state */
+.stTabs [data-baseweb="tab"]:hover {
+    background-color: #E0E7FF !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(30, 58, 138, 0.1);
+}
+
 </style>
 """, unsafe_allow_html=True)
 
